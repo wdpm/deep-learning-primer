@@ -79,7 +79,7 @@ $$
 $$
 加法节点的反向传播只乘以1，所以输入的值会原封不动地流向下一个节点。
 
-![](/images/backward-propagation-add-operation.png)
+![](./images/backward-propagation-add-operation.png)
 
 本例中把从上游传过来的导数的值设为
 $\frac{\mathrm{∂}L}{\mathrm{∂}z}$。这是因为我们假定了一个最终输出值为L的大型计算图。z = x + y的计算位于这个大型计算图的某个地方，从上游会传来$\frac{\mathrm{∂}L}{\mathrm{∂}z}$的值，并向下游传递
