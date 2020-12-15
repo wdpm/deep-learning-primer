@@ -10,4 +10,4 @@ def step_function(x):
 
 a = np.array([-0.6, 4, -0.3, 9])
 res = step_function(a)
-print(res)
+print(res)  # [0 1 0 1]
