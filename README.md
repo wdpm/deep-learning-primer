@@ -13,3 +13,8 @@ python -m readme2tex --nocdn --output README.md README.tex.md
 ## TODO
 - [ ] fork and fix readme2tex parse chinese BUG. 
 - [ ] add parse multi files features
+
+## Useful links
+- 公式王| https://gongshi.wang/
+- Mathpix Snipping Tool
+- https://www.latexlive.com

@@ -135,3 +135,302 @@ F=1.1*1=2.2\\
 G=1.1*3=3.3\\
 H=1.1*150=165
 $$
+
+### 简单层的实现
+#### 乘法层
+```python
+class MulLayer:
+    def __init__(self):
+        self.x = None
+        self.y = None
+
+    def forward(self, x, y):
+        self.x = x
+        self.y = y                
+        out = x * y
+
+        return out
+
+    def backward(self, dout):
+        dx = dout * self.y
+        dy = dout * self.x
+
+        return dx, dy
+```
+#### 加法层
+```python
+class AddLayer:
+    def __init__(self):
+        pass
+
+    def forward(self, x, y):
+        out = x + y
+
+        return out
+
+    def backward(self, dout):
+        dx = dout * 1
+        dy = dout * 1
+
+        return dx, dy
+```
+
+例子代码参考：
+
+- `buy_apple.py`
+- `buy_apple_orange.py`
+
+### 激活函数层的实现
+
+#### ReLU
+
+$$
+y=\left\{\begin{array}{ll}
+x & (x>0) \\
+0 & (x \leqslant 0)
+\end{array}\right.
+$$
+
+$$
+\frac{\partial y}{\partial x}=\left\{\begin{array}{ll}
+1 & (x>0) \\
+0 & (x \leqslant 0)
+\end{array}\right.
+$$
+
+如果正向传播时的输入x大于0，则反向传播会将上游的
+值原封不动地传给下游。反过来，如果正向传播时的x小于等于0，则反向
+传播中传给下游的信号将停在此处。
+
+![](./images/ReLU-layer.png)
+
+```python
+class Relu:
+    def __init__(self):
+        self.mask = None
+
+    def forward(self, x):
+        self.mask = (x <= 0)
+        out = x.copy()
+        out[self.mask] = 0
+
+        return out
+
+    def backward(self, dout):
+        dout[self.mask] = 0
+        dx = dout
+
+        return dx
+```
+
+out[self.mask] = 0 表示正向传播时，如果你是<=0的分量，那么你传播不到右边。
+
+dout[self.mask] = 0 表示反向传播时，如果你是<=0的分量，那么你也传播不到左边。
+
+> ReLU层的作用就像电路中的开关一样。正向传播时，有电流通过
+> 的话，就将开关设为ON；没有电流通过的话，就将开关设为OFF。
+> 反向传播时，开关为ON的话，电流会直接通过；开关为OFF的话，
+> 则不会有电流通过
+
+#### Sigmoid
+
+$$
+y=\frac{1}{1+\exp (-x)}
+$$
+
+![](./images/Sigmoid-layer-compute-graph.png)
+
+/ 节点表示 y =1/x ,导数：$\frac{\partial y}{\partial x} =-\frac{1}{x^2} =-y^2$。
+
+完整计算步骤如下：
+
+![](./images/Sigmoid-layer-compute-graph-result.png)
+
+归约中间过程：
+
+![](./images/Sigmoid-layer-compute-graph-simplify.png)
+
+进一步整理公式
+$$
+\begin{aligned}
+\frac{\partial L}{\partial y} y^{2} \exp (-x) &=\frac{\partial L}{\partial y} \frac{1}{(1+\exp (-x))^{2}} \exp (-x) \\
+&=\frac{\partial L}{\partial y} \frac{1}{1+\exp (-x)} \frac{\exp (-x)}{1+\exp (-x)} \\
+&=\frac{\partial L}{\partial y} y(1-y)
+\end{aligned}
+$$
+这样，就可以给出代码实现
+
+```python
+class Sigmoid:
+    def __init__(self):
+        self.out = None
+
+    def forward(self, x):
+        out = sigmoid(x)
+        self.out = out
+        return out
+
+    def backward(self, dout):
+        dx = dout * (1.0 - self.out) * self.out # self.out=上图的y
+
+        return dx
+```
+
+### Affine/Softmax层的实现
+
+> Affine在几何学领域被称为仿射变换。
+
+#### Affine层
+
+```bash
+>>> X = np.random.rand(2) # 输入
+>>> W = np.random.rand(2,3) # 权重
+>>> B = np.random.rand(3) # 偏置
+>>>
+>>> X.shape # (2,)
+>>> W.shape # (2, 3)
+>>> B.shape # (3,)
+>>>
+>>> Y = np.dot(X, W) + B
+```
+
+考虑计算图的反向传播
+$$
+\begin{aligned}
+\frac{\partial L}{\partial \boldsymbol{X}} &=\frac{\partial L}{\partial \boldsymbol{Y}} \cdot \boldsymbol{W}^{\mathrm{T}} \\
+\frac{\partial L}{\partial \boldsymbol{W}} &=\boldsymbol{X}^{\mathrm{T}} \cdot \frac{\partial L}{\partial \boldsymbol{Y}} 
+\end{aligned}\tag{5.13}
+$$
+
+> 5.13公式的推导。矩阵转置如何来的？下面会说明，不要着急。
+
+$W^T$的T表示转置。转置操作会把W的元素(i, j)换成元素
+(j, i).。
+
+举例
+$$
+\begin{array}{c}
+\boldsymbol{W}=\left(\begin{array}{lll}
+w_{11} & w_{12} & w_{13} \\
+w_{21} & w_{22} & w_{23}
+\end{array}\right) \\
+\boldsymbol{W}^{\mathrm{T}}=\left(\begin{array}{ll}
+w_{11} & w_{21} \\
+w_{12} & w_{22} \\
+w_{13} & w_{23}
+\end{array}\right)
+\end{array}
+$$
+Affine层的反向传播
+
+![](./images/Affine-layer-formula.png)
+
+> 疑惑的部分在于红线框的部分如何推导出来的？
+
+先考虑矩阵的形状
+$$
+\begin{array}{l}
+\boldsymbol{X}=\left(x_{0}, x_{1}, \cdots, x_{n}\right) \\
+\frac{\partial L}{\partial \boldsymbol{X}}=\left(\frac{\partial L}{\partial x_{0}}, \frac{\partial L}{\partial x_{1}}, \cdots, \frac{\partial L}{\partial x_{n}}\right)
+\end{array}
+$$
+ 比如  , $\frac{\partial L}{\partial Y}$  的形状是
+ (3,), W  的形状是 (2,3) 时，思考  $\frac{\partial L}{\partial Y}  $和  $\boldsymbol{W}^{\mathrm{T}} $ 的乘积，使得  $\frac{\partial L}{\partial \boldsymbol{X}}$  的形状为  (2,) 。
+
+这样就自然而然地推导出式  (5.13)。同理，$\frac{\partial L}{\partial W}$的推导也就出来了。
+
+> 矩阵的乘积（“dot”节点）的反向传播可以通过组建使矩阵对应维度的元素个数一
+> 致的乘积运算而推导出来。
+
+#### 批版本的Affine层
+
+前面介绍的Affine层的输入X是以单个数据为对象的。现在我们考虑N
+个数据一起进行正向传播的情况，也就是批版本的Affine层。也就是前面的N=1，现在我们要考虑N>1的情况。
+
+![](./images/Affine-layer-batch-version.png)
+
+加上偏置时，需要特别注意。正向传播时，偏置被加到X·W的各个
+数据上。比如，N = 2（数据为2个）时，偏置会被分别加到这2个数据.
+
+```python
+>>> X_dot_W = np.array([[0, 0, 0], [10, 10, 10]])
+>>> B = np.array([1, 2, 3])
+>>>
+>>> X_dot_W
+array([[ 0, 0, 0],
+[ 10, 10, 10]])
+>>> X_dot_W + B
+array([[ 1, 2, 3],
+[11, 12, 13]])
+```
+
+正向传播时，偏置会被加到每一个数据（第1个、第2个……）上。因此，
+反向传播时，各个数据的反向传播的值需要汇总为偏置的元素。
+
+> 反向传播时，各个数据的反向传播的值需要汇总为偏置的元素。为什么需要汇总？
+
+可以认为是X的每个分量都受到B的影响，而Y的每个分量受到X分量的影响，也就是Y的每个分量都收到B的影响。
+
+**而$\frac{\partial L}{\partial B}$的含义是B对L的影响。因此计算时需要将Y受到B影响的分量变化全部加起来**。
+
+```python
+>>> dY = np.array([[1, 2, 3,], [4, 5, 6]])
+>>> dY
+array([[1, 2, 3],
+[4, 5, 6]])
+>>>
+>>> dB = np.sum(dY, axis=0)
+>>> dB
+array([5, 7, 9])
+```
+
+> 这里使用了 np.sum()对第0轴（以数据为单
+> 位的轴，axis=0）方向上的元素进行求和
+
+初步实现如下：
+
+```python
+class Affine:
+    def __init__(self, W, b):
+        self.W = W
+        self.b = b
+        self.x = None
+        self.dW = None
+        self.db = None
+
+    def forward(self, x):
+        self.x = x
+        out = np.dot(x, self.W) + self.b
+        return out
+
+    def backward(self, dout):
+        dx = np.dot(dout, self.W.T)
+        self.dW = np.dot(self.x.T, dout)
+        self.db = np.sum(dout, axis=0)
+        return dx
+```
+
+#### Softmax-with-Loss 层
+
+softmax函数会将输入值正规化之后再输出。
+
+![](./images/Softmax-with-loss.png)
+
+因为手写数字识别要进行10类分类，所以向Softmax层的输入也有10个。
+
+> 神经网络中进行的处理有推理（inference）和学习两个阶段。神经网络的推理通常不使用Softmax层。比如，用图5-28的网络进行推理时，
+> 会将最后一个Affine层的输出作为识别结果。神经网络中未被正规
+> 化的输出结果（图5-28中Softmax层前面的Affine层的输出）有时被称为“得分”。也就是说，当神经网络的推理只需要给出一个答案
+> 的情况下，因为此时只对得分最大值感兴趣，所以不需要Softmax层。
+> 不过，神经网络的学习阶段则需要Softmax层。
+
+下面来实现Softmax层。考虑到这里也包含作为损失函数的交叉熵误
+差（cross entropy error），所以称为“Softmax-with-Loss层”。
+
+![](./images/Softmax-with-loss-compute-graph.png)
+
+> 这个图的正向和反向传播推导，参考附录A。
+
+Softmax 层将输入（a1, a2, a3）正规化，输出（y1,
+y2, y3）。Cross Entropy Error层接收Softmax的输出（y1, y2, y3）和教师标签（t1,
+t2, t3），从这些数据中输出损失L。
