@@ -1,5 +1,6 @@
 # coding: utf-8
 import sys, os
+
 sys.path.append(os.pardir)
 
 import numpy as np
@@ -26,21 +27,39 @@ for i in range(iters_num):
     batch_mask = np.random.choice(train_size, batch_size)
     x_batch = x_train[batch_mask]
     t_batch = t_train[batch_mask]
-    
+
     # 梯度
-    #grad = network.numerical_gradient(x_batch, t_batch)
+    # grad = network.numerical_gradient(x_batch, t_batch)
     grad = network.gradient(x_batch, t_batch)
-    
+
     # 更新
     for key in ('W1', 'b1', 'W2', 'b2'):
         network.params[key] -= learning_rate * grad[key]
-    
+
     loss = network.loss(x_batch, t_batch)
     train_loss_list.append(loss)
-    
+
     if i % iter_per_epoch == 0:
         train_acc = network.accuracy(x_train, t_train)
         test_acc = network.accuracy(x_test, t_test)
         train_acc_list.append(train_acc)
         test_acc_list.append(test_acc)
         print(train_acc, test_acc)
+
+# 0.1155 0.1166
+# 0.9023333333333333 0.9069
+# 0.9186833333333333 0.9204
+# 0.93345 0.9331
+# 0.9411 0.9386
+# 0.9484666666666667 0.9452
+# 0.9551 0.9525
+# 0.95805 0.9545
+# 0.96295 0.9597
+# 0.9645166666666667 0.9577
+# 0.9666666666666667 0.9612
+# 0.9704 0.9645
+# 0.9727166666666667 0.9672
+# 0.9741833333333333 0.9686
+# 0.9747833333333333 0.9683
+# 0.978 0.9698
+# 0.9785166666666667 0.9699

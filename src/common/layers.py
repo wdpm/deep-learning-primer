@@ -101,6 +101,8 @@ class SoftmaxWithLoss:
         return self.loss
 
     def backward(self, dout=1):
+        # Thinking: 疑惑行为，为何要除以batch_size？
+        # 请注意反向传播时，将要传播的值除以批的大小（batch_size）后，传递给前面的层的是单个数据的误差
         batch_size = self.t.shape[0]
         if self.t.size == self.y.size:  # 监督数据是one-hot-vector的情况
             dx = (self.y - self.t) / batch_size
