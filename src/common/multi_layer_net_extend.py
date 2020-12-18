@@ -1,5 +1,8 @@
 # coding: utf-8
 import sys, os
+
+from src.common.layers import Dropout
+
 sys.path.append(os.pardir) # 为了导入父目录的文件而进行的设定
 import numpy as np
 from collections import OrderedDict

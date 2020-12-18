@@ -16,10 +16,11 @@ x_train = x_train[:300]
 t_train = t_train[:300]
 
 # weight decay（权值衰减）的设定 =======================
-#weight_decay_lambda = 0 # 不使用权值衰减的情况
-weight_decay_lambda = 0.1
+weight_decay_lambda = 0 # 不使用权值衰减的情况
+# weight_decay_lambda = 0.1
 # ====================================================
 
+# [100, 100, 100, 100, 100, 100] 表示 7 层
 network = MultiLayerNet(input_size=784, hidden_size_list=[100, 100, 100, 100, 100, 100], output_size=10,
                         weight_decay_lambda=weight_decay_lambda)
 optimizer = SGD(lr=0.01)
@@ -55,7 +56,6 @@ for i in range(1000000000):
         if epoch_cnt >= max_epochs:
             break
 
-
 # 3.绘制图形==========
 markers = {'train': 'o', 'test': 's'}
 x = np.arange(max_epochs)
@@ -64,5 +64,6 @@ plt.plot(x, test_acc_list, marker='s', label='test', markevery=10)
 plt.xlabel("epochs")
 plt.ylabel("accuracy")
 plt.ylim(0, 1.0)
+# legend location => 右下角
 plt.legend(loc='lower right')
 plt.show()

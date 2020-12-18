@@ -16,7 +16,7 @@ t_train = t_train[:300]
 
 # 设定是否使用Dropuout，以及比例 ========================
 use_dropout = True  # 不使用Dropout的情况下为False
-dropout_ratio = 0.2
+dropout_ratio = 0.15
 # ====================================================
 
 network = MultiLayerNetExtend(input_size=784, hidden_size_list=[100, 100, 100, 100, 100, 100],
