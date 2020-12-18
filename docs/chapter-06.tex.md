@@ -298,7 +298,7 @@ $\sqrt{\frac{1}{n} }$ 时，（直观上）可以解释为，因为ReLU的负值
 
 > **权重初始值为标准差是 0.01 的高斯分布时**
 
-<img src="./images/ReLU-0.01w.png" style="zoom:50%;" />
+<img src="./images/ReLU-0.01w.png" style="max-width:50%;" />
 
 > 权重初始值为 Xavier 初始值时
 
