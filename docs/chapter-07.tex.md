@@ -171,6 +171,222 @@ channel, height, width) 的顺序书写。比如，通道数为 3、大小为 5 
 
 #### 基于im2col的展开
 
-im2col是一个函数，将输入数据展开以适合滤波器（权重）。如图7-17所示，
-对3维的输入数据应用 im2col后，数据转换为2维矩阵（正确地讲，是把包含
-批数量的4维数据转换成了2维数据)。
+im2col是一个函数，将输入数据展开以适合滤波器（权重）。
+
+如图7-18所示，
+对于输入数据，将应用滤波器的区域（3维方块）横向展开为1~~列~~。im2col会
+在所有应用滤波器的地方进行这个展开处理。
+
+<img src="./images/im2col-filter-to-one-column.png" style="zoom:50%;" />
+
+> im2col这个名称是“image to column”的缩写，翻译过来就是“从
+> 图像到矩阵”的意思。Caffe、Chainer 等深度学习框架中有名为
+> im2col的函数，并且在卷积层的实现中，都使用了 im2col。
+
+> 勘误：上述7-18中展开为1列，应该是展开为一行。
+
+使用 im2col展开输入数据后，之后就只需将卷积层的滤波器（权重）纵
+向展开为1列，并计算2个矩阵的乘积。
+
+如图7-19所示，基于 im2col方式的输出结果是2维矩阵。因为CNN中
+数据会保存为4维数组，所以要将2维输出数据转换为合适的形状（reshape)。以上就
+是卷积层的实现流程。
+
+<img src="./images/convolution-im2col-compute-procedure.png" style="zoom:50%;" />
+
+#### 卷积层的实现
+
+> im2col的实现内容在 common/util.py中.
+
+```
+im2col (input_data, filter_h, filter_w, stride=1, pad=0)
+```
+
+```python
+import sys, os
+sys.path.append(os.pardir)
+from common.util import im2col
+
+x1 = np.random.rand(1, 3, 7, 7)
+col1 = im2col(x1, 5, 5, stride=1, pad=0)
+print(col1.shape) # (9, 75)
+
+x2 = np.random.rand(10, 3, 7, 7) # 10个数据
+col2 = im2col(x2, 5, 5, stride=1, pad=0)
+print(col2.shape) # (90, 75)
+```
+
+批大小为1时，im2col的结果是 (9, 75)。而第2
+个例子中批大小为10，所以保存了10倍的数据，即 (90, 75).
+
+初步实现
+
+```python
+class Convolution:
+    def __init__(self, W, b, stride=1, pad=0):
+        self.W = W
+        self.b = b
+        self.stride = stride
+        self.pad = pad
+
+    def forward(self, x):
+        FN, C, FH, FW = self.W.shape
+        N, C, H, W = x.shape
+        out_h = int(1 + (H + 2 * self.pad - FH) / self.stride)
+        out_w = int(1 + (W + 2 * self.pad - FW) / self.stride)
+        
+        col = im2col(x, FH, FW, self.stride, self.pad)
+        col_W = self.W.reshape(FN, -1).T  # 滤波器的展开
+        out = np.dot(col, col_W) + self.b
+        out = out.reshape(N, out_h, out_w, -1).transpose(0, 3, 1, 2)
+        
+        return out
+```
+
+注意这行
+
+```
+col_W = self.W.reshape(FN, -1).T  # 滤波器的展开
+```
+
+通过在 reshape时指定为 -1，reshape函数会自
+动计算 -1维度上的元素个数，以使多维数组的元素个数前后一致。**比如，**
+**(10, 3, 5, 5)形状的数组的元素个数共有 750个，指定 reshape(10,-1)后，就**
+**会转换成(10, 75)形状的数。也即是10行75列的数据**。理解这点非常重要。
+
+forward的实现中，最后会将输出大小转换为合适的形状。转换时使用了
+NumPy的 transpose函数。transpose会更改多维数组的轴的顺序。
+
+<img src="./images/use-numpy-transpose-to-change-axis.png" style="zoom:50%;" />
+
+接下来是卷积层的反向传播的实现，和Affine层的实现有很多共通的地方，就不再介绍。有一点需要注意，在进行卷积层的反向传播时，必须进行 im2col
+的逆处理。这可以使用本书提供的 col2im函数。除了使用 col2im这一点，卷积层的反向传播和Affi ne层的实
+现方式都一样。
+
+#### 池化层的实现
+
+池化在通道方向上是独立的，这一点和卷积层不同。具体地讲，池化的应用区域按通道单独展开。
+
+<img src="./images/pooling-of-input-data.png" style="zoom:50%;" />
+
+<img src="./images/pooling-layer-impl.png" style="zoom:50%;" />
+
+代码描述
+
+```python
+class Pooling:
+    def __init__(self, pool_h, pool_w, stride=1, pad=0):
+        self.pool_h = pool_h
+        self.pool_w = pool_w
+        self.stride = stride
+        self.pad = pad
+
+    def forward(self, x):
+        N, C, H, W = x.shape
+        out_h = int(1 + (H - self.pool_h) / self.stride)
+        out_w = int(1 + (W - self.pool_w) / self.stride)
+        # 展开(1)
+        col = im2col(x, self.pool_h, self.pool_w, self.stride, self.pad)
+        col = col.reshape(-1, self.pool_h * self.pool_w)
+        # 最大值(2)
+        out = np.max(col, axis=1)
+        # 转换(3)
+        out = out.reshape(N, out_h, out_w, C).transpose(0, 3, 1, 2)
+        return out
+```
+
+池化层的实现按下面3个阶段进行
+
+1. 展开输入数据。
+2. 求各行的最大值。
+3. 转换为合适的输出大小
+
+> np.max 可以指定
+> axis参数，并在这个参数指定的各个轴方向上求最大值
+
+池化层的 backward处理可以参考ReLU层的实现中使用的max的反向传播。池化层的实现在common/layer.py中.
+
+### CNN的实现
+
+<img src="./images/simple-cnn-structure.png" style="zoom:50%;" />
+
+> SimpleConvNet的初始化
+
+参数
+
+- input_dim―输入数据的维度：（通道，高，长）C H W
+- conv_param―卷积层的超参数（字典）。字典的关键字如下：
+  - filter_num―滤波器的数量 FN
+  - filter_size―滤波器的大小 FS, （这个指高和宽一致？例如 3 X 3？）
+  - stride―步幅
+  - pad―填充
+- hidden_size―隐藏层（全连接）的神经元数量
+- output_size―输出层（全连接）的神经元数量
+- weitght_int_std―初始化时权重的标准差
+
+> 卷积层的超参数 conv_param。设想它会像 {'filter_num':30,'filter_size':5, 'pad':0, 'stride':1}这样，保存必要的超参数值。
+
+代码实现：src/ch07/simple_convnet.py
+
+学习的代码：src/ch07/train_convnet.py
+
+> 使用前5000份数据快速测试，得出的正确率为 test acc:0.954。
+
+### CNN的可视化
+
+#### 第1层权重的可视化
+
+我们对 MNIST 数据集进行了简单的 CNN 学习。当时，第 1 层的
+卷积层的权重的形状是(30, 1, 5, 5)，即30个大小为5 × 5、通道为1的滤波
+器。滤波器大小是5 × 5、通道数是1，意味着滤波器可以可视化为1通道的
+灰度图像。
+
+<img src="./images/visualizer-layer-1.png" style="zoom:50%;" />
+
+通过学
+习，滤波器被更新成了有规律的滤波器，比如从白到黑渐变的滤波器、含有
+块状区域（称为blob）的滤波器等。
+
+#### 基于分层结构的信息提取
+
+第1层的卷积层中提取了边
+缘或斑块等“低级”信息，那么在堆叠了多层的CNN中，各层中又会提取什
+么样的信息呢？根据深度学习的可视化相关的研究
+[17][18]，随着层次加深，提
+取的信息（正确地讲，是反映强烈的神经元）也越来越抽象。
+
+<img src="./images/cnn-conv-extract-info.png" style="zoom:50%;" />
+
+### 具有代表性的CNN
+
+一个是在1998年首次被提出的CNN元祖LeNet[20]，
+另一个是在深度学习受到关注的2012年被提出的AlexNet。
+
+#### LeNet
+
+它有连续的卷积层和池化层（正确地讲，是只“抽选元素”的子采样层），最后经全连接层输出结果。
+
+<img src="./images/LeNet.png" style="zoom:50%;" />
+
+LeNet 中使用sigmoid 函数，而现在的 CNN中主要使用 ReLU 函数。
+此外，原始的LeNet中使用子采样（subsampling）缩小中间数据的大小，而现在的CNN中Max池化是主流。
+
+#### AlexNet
+
+<img src="./images/AlexNet.png" style="zoom:50%;" />
+
+AlexNet叠有多个卷积层和池化层，最后经由全连接层输出结果。
+
+- 激活函数使用ReLU。
+- 使用进行局部正规化的LRN（Local Response Normalization）层。
+- 使用Dropout。
+
+### 小结
+
+在图像处理领域，几乎毫无例外地都会使用CNN。
+
+- CNN在此前的全连接层的网络中新增了卷积层和池化层。
+- 使用 im2col函数可以简单、高效地实现卷积层和池化层。
+- 通过CNN的可视化，可知随着层次变深，提取的信息愈加高级。
+- LeNet和AlexNet是CNN的代表性网络。
+- 在深度学习的发展中，大数据和GPU做出了很大的贡献

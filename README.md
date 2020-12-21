@@ -1,5 +1,5 @@
 # Deep Learning Primer
-> WIP 
+> WIP 整理学习的三角形金字塔维度
 
 ## Use readme2tex to write docs
 Usage
