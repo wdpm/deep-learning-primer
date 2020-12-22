@@ -11,6 +11,7 @@ python -m readme2tex --nocdn --output README.md README.tex.md
 - `README.tex.md` means input 
 
 ## TODO
+- [ ] find a markdown formatter to format normalize *.md space
 - [ ] fork and fix readme2tex parse chinese BUG. 
 - [ ] add parse multi files features
 
